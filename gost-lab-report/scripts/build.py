@@ -83,16 +83,28 @@ def fill_title_page(src_path: Path, metadata: dict, output_path: Path):
     doc.save(str(output_path))
 
 
+def preprocess_markdown(md_path: Path, output_path: Path):
+    text = md_path.read_text(encoding="utf-8")
+    text = text.replace("\u2014", "\u2013")  # em dash -> en dash
+    text = re.sub(r"(?m)^title:.*\n", "", text)  # strip title from YAML (already on title page)
+    output_path.write_text(text, encoding="utf-8")
+
+
 def build_report_body(md_path: Path, output_path: Path):
-    cmd = [
-        "pandoc",
-        str(md_path),
-        "-o",
-        str(output_path),
-        f"--reference-doc={REFERENCE_DOC}",
-        f"--lua-filter={PAGEBREAK_FILTER}",
-    ]
-    subprocess.run(cmd, check=True, cwd=md_path.parent)
+    preprocessed = md_path.parent / f".{md_path.stem}_preprocessed.md"
+    preprocess_markdown(md_path, preprocessed)
+    try:
+        cmd = [
+            "pandoc",
+            str(preprocessed),
+            "-o",
+            str(output_path),
+            f"--reference-doc={REFERENCE_DOC}",
+            f"--lua-filter={PAGEBREAK_FILTER}",
+        ]
+        subprocess.run(cmd, check=True, cwd=md_path.parent)
+    finally:
+        preprocessed.unlink(missing_ok=True)
 
 
 def merge_documents(title_path: Path, body_path: Path, output_path: Path):

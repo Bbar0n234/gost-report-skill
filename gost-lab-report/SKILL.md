@@ -33,7 +33,6 @@ description: >
 
 ```yaml
 ---
-title: "Лабораторная работа №N"
 teacher_title: "должность, уч. степень, звание"
 teacher_name: "И.И. Фамилия"
 lab_number: "N"
