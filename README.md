@@ -4,7 +4,8 @@ Claude Code skill для автоматического оформления о�
 
 ## Что делает
 
-- LLM генерирует отчёт в Markdown
+- LLM-агент анализирует методичку / задание, предлагает структуру отчёта, согласовывает с пользователем
+- Генерирует отчёт в Markdown
 - Скрипт собирает .docx с правильными стилями (Times New Roman 14pt, отступы, поля по ГОСТ) и титульным листом
 - Титульный лист заполняется автоматически из YAML-метаданных
 
@@ -12,6 +13,7 @@ Claude Code skill для автоматического оформления о�
 
 - [Pandoc](https://pandoc.org/) >= 3.1.12
 - Python >= 3.10
+- Python-пакеты: `python-docx`, `docxcompose`
 - Шрифт Times New Roman
 
 ## Установка
@@ -45,34 +47,6 @@ cp -r gost-report-skill/gost-lab-report ~/.claude/skills/
 python ~/.claude/skills/gost-lab-report/scripts/build.py report.md
 ```
 
-### Формат Markdown
-
-Отчёт начинается с YAML front matter:
-
-```yaml
----
-title: "Лабораторная работа №3"
-teacher_title: "канд. техн. наук, доцент"
-teacher_name: "И.И. Петров"
-lab_number: "3"
-lab_title: "Исследование характеристик системы"
-discipline: "Операционные системы"
-group: "3234к"
-student_name: "С.А. Феоктистов"
-department: "Кафедра №33"
----
-
-# Теоретическая часть
-
-Текст отчёта...
-
-\newpage
-
-# Выводы
-
-Текст выводов...
-```
-
 ## Кастомизация титульного листа
 
 Титульный лист встроен в `gost-lab-report/templates/reference.docx`. Для адаптации под свой вуз:
@@ -84,6 +58,14 @@ department: "Кафедра №33"
 
 Поддерживаемые плейсхолдеры: `{{TEACHER_TITLE}}`, `{{TEACHER_NAME}}`, `{{LAB_NUMBER}}`, `{{LAB_TITLE}}`, `{{DISCIPLINE}}`, `{{GROUP}}`, `{{STUDENT_NAME}}`, `{{DEPARTMENT}}`, `{{YEAR}}` (заполняется автоматически).
 
-## Лицензия
+## Поддерживаемые вузы
 
-MIT
+Готовые шаблоны титульных листов (в разработке):
+
+- *Список будет дополнен*
+
+Если вашего вуза нет в списке — используйте инструкцию по кастомизации выше или Setup Wizard (`gost-lab-report/SETUP.md`).
+
+## Роадмап
+
+Подробный план развития: [docs/ROADMAP.md](docs/ROADMAP.md)
