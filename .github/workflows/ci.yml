@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, v2-sync-ci]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Linux: полный путь (pandoc + LibreOffice + UNO + шрифты) ---
+      - name: Install deps (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+          sudo apt-get install -y pandoc libreoffice-writer python3-uno ttf-mscorefonts-installer fonts-liberation
+          python3 -m pip install --break-system-packages python-docx docxcompose
+
+      # --- Windows/macOS: слой 0, LibreOffice нет — проверяем честную деградацию ---
+      - name: Set up Python (Windows/macOS)
+        if: runner.os != 'Linux'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install -y pandoc --no-progress
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Pandoc"
+          python -m pip install python-docx docxcompose
+
+      - name: Install deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install pandoc
+          python -m pip install python-docx docxcompose
+
+      - name: Show versions
+        shell: bash
+        run: |
+          pandoc --version | head -1
+          python3 --version 2>/dev/null || python --version
+          soffice --version 2>/dev/null || echo "libreoffice: NOT FOUND (expected on Windows/macOS)"
+
+      - name: Build + verify (full path, TOC computed)
+        if: runner.os == 'Linux'
+        run: python3 tests/ci_check.py --expect-toc
+
+      - name: Build + verify (degraded path, no LibreOffice)
+        if: runner.os != 'Linux'
+        run: python tests/ci_check.py --expect-degraded
+
+      - name: Upload built documents
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docx-${{ matrix.os }}
+          path: tests/out/*.docx
+          if-no-files-found: ignore
