@@ -518,7 +518,7 @@ def _insert_toc_field(document_xml: str) -> str:
 
     toc_core = (
         # Heading line
-        '<w:p><w:pPr><w:pStyle w:val="UnnumberedHeading1NoTOC"/>'
+        '<w:p><w:pPr><w:pStyle w:val="UnnumberedHeading1NoTOC1"/>'
         '<w:jc w:val="center"/></w:pPr>'
         '<w:r><w:t xml:space="preserve">СОДЕРЖАНИЕ</w:t></w:r></w:p>'
         # TOC field
