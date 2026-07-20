@@ -270,6 +270,7 @@ def _postprocess_body(body_path: Path, metadata: dict):
         document_xml = zf.read("word/document.xml").decode("utf-8")
 
     document_xml = _fix_tables(document_xml)
+    document_xml = _fit_table_widths(document_xml)
     document_xml = _fix_structural_headings(document_xml)
     document_xml = _center_appendix_titles(document_xml)
     if number_headings:
@@ -346,6 +347,106 @@ def _fix_tables(document_xml: str) -> str:
         document_xml,
     )
     return document_xml
+
+
+def _fit_table_widths(document_xml: str) -> str:
+    """Пересчёт ширин колонок по фактическому содержимому ячеек.
+
+    pandoc назначает gridCol пропорционально ширине колонок в исходном
+    Markdown, а не по содержимому: колонка с короткими данными и длинным
+    заголовком получает ширину «по данным», и заголовок ломается посреди
+    слова. Минимум колонки — её самое длинное неразрывное слово; остаток
+    рабочей области раздаётся пропорционально объёму текста, но колонка,
+    целиком помещающаяся в одну строку, шире этой строки не делается.
+    Ширины — стартовая раскладка для рендереров, честных к сохранённым
+    значениям (LibreOffice/печать); tblLayout остаётся autofit, чтобы Word
+    мог пересчитать по своим метрикам.
+    """
+    CHAR_W = 150   # средняя ширина символа TNR 14pt в twips (с запасом под жирные заголовки)
+    PAD = 250      # внутренние поля ячейки (2×108) + рамки
+    AVAIL = 9638   # рабочая область A4 при полях слева/справа 20 мм
+    MIN_COL = 700
+
+    def cell_text(tc_xml: str) -> str:
+        return " ".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", tc_xml))
+
+    def process_table(match: re.Match) -> str:
+        tbl = match.group(0)
+        # объединённые ячейки и картинки в ячейках — раскладку не трогаем
+        if "gridSpan" in tbl or "<w:drawing" in tbl:
+            return tbl
+        grid = re.search(r"<w:tblGrid>.*?</w:tblGrid>", tbl, re.DOTALL)
+        if not grid:
+            return tbl
+        ncols = len(re.findall(r"<w:gridCol", grid.group(0)))
+        rows = re.findall(r"<w:tr\b.*?</w:tr>", tbl, re.DOTALL)
+        if not ncols or not rows:
+            return tbl
+        cols = [[] for _ in range(ncols)]
+        for row in rows:
+            cells = re.findall(r"<w:tc>.*?</w:tc>", row, re.DOTALL)
+            if len(cells) != ncols:
+                return tbl
+            for j, c in enumerate(cells):
+                cols[j].append(cell_text(c))
+
+        min_w, max_w, weight = [], [], []
+        for texts in cols:
+            words = [w for t in texts for w in t.split()] or [""]
+            longest_word = max(len(w) for w in words)
+            longest_cell = max(len(t) for t in texts)
+            min_w.append(max(MIN_COL, longest_word * CHAR_W + PAD))
+            max_w.append(max(MIN_COL, longest_cell * CHAR_W + PAD))
+            weight.append(sum(len(t) for t in texts) + 1)
+
+        if sum(min_w) >= AVAIL:
+            # даже длиннейшие слова не помещаются — ужимаем пропорционально
+            scale = AVAIL / sum(min_w)
+            widths = [int(w * scale) for w in min_w]
+        else:
+            widths = list(min_w)
+            extra = AVAIL - sum(min_w)
+            for _ in range(3):  # излишки сверх «одной строки» перераздаются
+                growable = [j for j in range(ncols) if widths[j] < max_w[j]]
+                total_weight = sum(weight[j] for j in growable)
+                if not growable or not total_weight or extra <= 0:
+                    break
+                leftover = 0
+                for j in growable:
+                    add = int(extra * weight[j] / total_weight)
+                    if widths[j] + add > max_w[j]:
+                        leftover += widths[j] + add - max_w[j]
+                        widths[j] = max_w[j]
+                    else:
+                        widths[j] += add
+                extra = leftover
+
+        total = sum(widths)
+        new_grid = ("<w:tblGrid>"
+                    + "".join(f'<w:gridCol w:w="{w}"/>' for w in widths)
+                    + "</w:tblGrid>")
+        tbl = tbl.replace(grid.group(0), new_grid, 1)
+        tbl = re.sub(r"<w:tblW[^/]*/>",
+                     f'<w:tblW w:w="{total}" w:type="dxa"/>', tbl, count=1)
+
+        def fix_row(m: re.Match) -> str:
+            idx = [0]
+
+            def fix_cell(cm: re.Match) -> str:
+                w = widths[idx[0]]
+                idx[0] += 1
+                return re.sub(r"<w:tcW[^/]*/>",
+                              f'<w:tcW w:w="{w}" w:type="dxa"/>',
+                              cm.group(0), count=1)
+
+            return re.sub(r"<w:tc>.*?</w:tc>", fix_cell, m.group(0),
+                          flags=re.DOTALL)
+
+        tbl = re.sub(r"<w:tr\b.*?</w:tr>", fix_row, tbl, flags=re.DOTALL)
+        return tbl
+
+    return re.sub(r"<w:tbl>.*?</w:tbl>", process_table, document_xml,
+                  flags=re.DOTALL)
 
 
 def _center_row_paragraphs(row_xml: str) -> str:
