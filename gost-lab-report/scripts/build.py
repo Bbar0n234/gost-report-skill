@@ -335,6 +335,19 @@ def _fix_tables(document_xml: str) -> str:
             new_first = _center_row_paragraphs(first_row.group(0))
             tbl = tbl.replace(first_row.group(0), new_first, 1)
 
+        # cantSplit: строка таблицы не режется границей страницы, а целиком
+        # переезжает на следующую (иначе на разрыве остаётся огрызок строки)
+        def add_cantsplit(row_m: re.Match) -> str:
+            row = row_m.group(0)
+            if "<w:cantSplit" in row:
+                return row
+            if "<w:trPr>" in row:
+                return row.replace("<w:trPr>", "<w:trPr><w:cantSplit/>", 1)
+            return re.sub(r"(<w:tr\b[^>]*>)",
+                          r"\1<w:trPr><w:cantSplit/></w:trPr>", row, count=1)
+
+        tbl = re.sub(r"<w:tr\b.*?</w:tr>", add_cantsplit, tbl, flags=re.DOTALL)
+
         return tbl
 
     document_xml = re.sub(r'<w:tbl>.*?</w:tbl>', process_table, document_xml, flags=re.DOTALL)
