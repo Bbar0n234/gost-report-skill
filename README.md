@@ -14,7 +14,7 @@
        → пишет текст → собирает report.docx с титульником и оформлением
 ```
 
-Полный пример готовой работы — от исходного текста до собранных .docx и .pdf — в [examples/full_lab](examples/full_lab).
+Полный пример готовой работы — от исходного текста до собранных .docx и .pdf — в [examples/full_lab](gost-lab-report/examples/full_lab).
 
 ## Что умеет
 
